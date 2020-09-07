@@ -1,0 +1,11 @@
+*.exe
+*.exp
+*.lib
+
+boinc/
+tests/
+
+flower_checkpoint.txt
+output.txt
+
+TODO
