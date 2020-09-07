@@ -210,6 +210,8 @@ __global__ void gpu_bruteforce(unsigned long long start_seed, unsigned long long
 
 struct checkpoint_vars {
     int offset;
+    unsigned long long dfz_tracker;
+    unsigned long long seed;
     time_t elapsed_chkpoint;
     unsigned long long total_counter;
 };
@@ -274,6 +276,10 @@ void run_kernel(unsigned long long dfz_initial_start) {
     int block_group_start = 0;
     time_t elapsed_chkpoint = 0;
 
+    // Variables to track progress
+    unsigned long long seed = 0;
+    unsigned long long dfz_tracker = dfz_initial_start;
+
     FILE *fp;
 
     boinc_begin_critical_section();
@@ -285,6 +291,8 @@ void run_kernel(unsigned long long dfz_initial_start) {
         fread(&data_store, sizeof(data_store), 1, fp);
 
         block_group_start = data_store.offset;
+        dfz_tracker = data_store.dfz_tracker;
+        seed = data_store.seed;
         elapsed_chkpoint = data_store.elapsed_chkpoint;
         total_counter = data_store.total_counter;
 
@@ -292,6 +300,22 @@ void run_kernel(unsigned long long dfz_initial_start) {
         // fprintf(stderr, "Checkpoint loaded. Offset: %d, task time: %lu s.\n", block_group_start, elapsed_chkpoint);
         fprintf(stderr, "Checkpoint loaded. Offset: %d, task time: %llu s.\n", block_group_start, elapsed_chkpoint);
         fclose(fp);
+    } else {
+        //
+        // Calculate the seed from the starting dfz given as an argument
+        //
+
+        // Skip chunks in chunks of 2^16 if possible, to save computational time (up to 2^32) iterations here
+        double large_skips = floor(dfz_initial_start / (1 << 16));
+        for (int i = 0; i < large_skips; i++) {
+            seed = (seed * LCG_SKIP_2_16_MULTIPLIER + LCG_SKIP_2_16_ADDEND) & LCG_MASK;
+        }
+
+        // Handle the rest of the lcg skips (up to 2^16 -1 iterations here)
+        for (int i = 0; i < (dfz_initial_start) - (large_skips * (1 << 16)); i++) {
+            seed = (seed * LCG_MULTIPLIER + LCG_ADDEND) & LCG_MASK;
+        }
+
     }
 
     boinc_end_critical_section();
@@ -303,27 +327,8 @@ void run_kernel(unsigned long long dfz_initial_start) {
         fprintf(stderr, "Doing %d total block groups, starting at %d, with %d blocks each containing %d threads.\n", block_groups_needed, block_group_start, BLOCKS_PER_GROUP, THREADS_PER_BLOCK);
     }
     time_t start_time = time(NULL);
-    // unsigned long long starting_seed = 112962399045242;  // Polymetrics test seed
-    unsigned long long starting_seed = 0;                   // 0 because we take input as dfz, although because of this variable,
-                                                            // seed can also be used as an input.
-    unsigned long long dfz_tracker = dfz_initial_start;
+    // unsigned long long seed = 112962399045242;  // Polymetrics test seed
 
-    //
-    // Calculate the seed from the starting dfz given as an argument
-    //
-
-    // Skip chunks of 2^16 if possible, to save computational time
-    double large_skips = floor(dfz_initial_start / (1 << 16));
-    for (int i = 0; i < large_skips; i++) {
-        starting_seed = (starting_seed * LCG_SKIP_2_16_MULTIPLIER + LCG_SKIP_2_16_ADDEND) & LCG_MASK;
-    }
-
-    // Handle the rest of the lcg skips (up to 2^16 - 1 iterations)
-    for (int i = 0; i < (dfz_initial_start) - (large_skips * (1 << 16)); i++) {
-        starting_seed = (starting_seed * LCG_MULTIPLIER + LCG_ADDEND) & LCG_MASK;
-    }
-
-    bool first_block_this_process = true;
     for (int block_group = block_group_start; block_group < block_groups_needed; block_group++) {
 
         // Minimize the extra work we are doing (yay efficiency)
@@ -337,23 +342,11 @@ void run_kernel(unsigned long long dfz_initial_start) {
             fprintf(stderr, "[Block %d]: Searching %llu seeds.\n", block_group + 1, blocks_to_do * THREADS_PER_BLOCK * THREAD_WORK);
         }
 
-        if (first_block_this_process) {
-            for (int j = 0; j < block_group; j++) {
-                starting_seed = (starting_seed * LCG_SKIP_GROUP_MULTIPLIER + LCG_SKIP_GROUP_ADDEND) & LCG_MASK;
-                dfz_tracker += (BLOCKS_PER_GROUP * THREADS_PER_BLOCK * THREAD_WORK * 6);
-            }
-
-            first_block_this_process = false;
-        } else {
-            starting_seed = (starting_seed * LCG_SKIP_GROUP_MULTIPLIER + LCG_SKIP_GROUP_ADDEND) & LCG_MASK;
-            dfz_tracker += (BLOCKS_PER_GROUP * THREADS_PER_BLOCK * THREAD_WORK * 6);
-        }
-
         // Launch kernel
         if (DEBUG) {
-            fprintf(stderr, "Starting seed: %llu.\n", starting_seed);
+            fprintf(stderr, "Starting seed: %llu.\n", seed);
         }
-        gpu_bruteforce<<<blocks_to_do, THREADS_PER_BLOCK>>>(starting_seed, counter, seed_list, missing_count_list, lcg_skip_list_multiplier, lcg_skip_list_addend);
+        gpu_bruteforce<<<blocks_to_do, THREADS_PER_BLOCK>>>(seed, counter, seed_list, missing_count_list, lcg_skip_list_multiplier, lcg_skip_list_addend);
         cudaDeviceSynchronize();
 
         boinc_begin_critical_section();
@@ -366,6 +359,8 @@ void run_kernel(unsigned long long dfz_initial_start) {
 
         struct checkpoint_vars data_store;
         data_store.offset = block_group + 1;
+        data_store.dfz_tracker = dfz_tracker;
+        data_store.seed = seed;
         data_store.elapsed_chkpoint = elapsed_chkpoint + elapsed;
         data_store.total_counter = total_counter;
 
