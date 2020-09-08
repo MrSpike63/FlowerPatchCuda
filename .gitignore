@@ -1,10 +1,10 @@
 *.exe
 *.exp
-*.lib
-
-boinc/
+.\*.lib
 tests/
 
+flower.lib
+flower.exe
 flower_checkpoint.txt
 output.txt
 
