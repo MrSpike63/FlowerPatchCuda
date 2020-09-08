@@ -30,6 +30,9 @@
 #define LCG_SKIP_2_16_MULTIPLIER 184682916610049ULL
 #define LCG_SKIP_2_16_ADDEND 258238410457088ULL
 
+#define LCG_SKIP_2_32_MULTIPLIER 237099374608385ULL
+#define LCG_SKIP_2_32_ADDEND 229492987527168ULL
+
 
 // #define BOINC 0
 
@@ -305,17 +308,24 @@ void run_kernel(unsigned long long dfz_initial_start) {
         // Calculate the seed from the starting dfz given as an argument
         //
 
-        // Skip chunks in chunks of 2^16 if possible, to save computational time (up to 2^32) iterations here
-        double large_skips = floor(dfz_initial_start / (1 << 16));
+        // Large skips (2^32)
+        int large_skips = floor((double)dfz_initial_start / (1ULL << 32));
         for (int i = 0; i < large_skips; i++) {
+            seed = (seed * LCG_SKIP_2_32_MULTIPLIER + LCG_SKIP_2_32_ADDEND) & LCG_MASK;
+        }
+        dfz_initial_start -= large_skips * (1ULL << 32);
+
+        // Medium skips (2^16)
+        int medium_skips = floor((double)dfz_initial_start / (1ULL << 16));
+        for (int i = 0; i < medium_skips; i++) {
             seed = (seed * LCG_SKIP_2_16_MULTIPLIER + LCG_SKIP_2_16_ADDEND) & LCG_MASK;
         }
+        dfz_initial_start -= large_skips * (1ULL << 16);
 
         // Handle the rest of the lcg skips (up to 2^16 -1 iterations here)
-        for (int i = 0; i < (dfz_initial_start) - (large_skips * (1 << 16)); i++) {
+        for (int i = 0; i < dfz_initial_start; i++) {
             seed = (seed * LCG_MULTIPLIER + LCG_ADDEND) & LCG_MASK;
         }
-
     }
 
     boinc_end_critical_section();
