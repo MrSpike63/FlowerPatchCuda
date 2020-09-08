@@ -27,9 +27,9 @@ class PaintingCrackAssimilator(Assimilator):
         
         center_coords = file_re_result.findall(input_str)[0]
 
-        with open(os.path.join(path, "{}.txt".format(center_coords)), "a") as f:
+        with open(os.path.join(path, "results.txt"), "a") as f:
 		    for match in re_result.finditer(input_str):
-                f.write("{}\n".format(match.group(1)))
+                f.write("Center: {}, seed: {}\n".format(center_coords, match.group(1)))
 
 if __name__ == "__main__":
     asm = PaintingCrackAssimilator()
