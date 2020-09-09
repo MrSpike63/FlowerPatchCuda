@@ -1,5 +1,5 @@
 // nvcc -o flower flower.cu -O3 -m=64 -Xptxas -O3
-
+//nvcc flower.cu -o flower.exe -O3 -m=64 -Xptxas -v -Iboinc\ -Iboinc\win\ -Lboinc\lib\win\ -lboinc_api -lboinc -lcuda -luser32 -DBOINC -D_WIN32
 #include <iostream>
 
 #define LCG_XOR 25214903917L
@@ -35,7 +35,6 @@
 
 
 // #define BOINC 0
-
 #ifdef BOINC
     #include "boinc_api.h"
     #if defined _WIN32 || defined _WIN64
@@ -52,7 +51,6 @@
     #define boinc_fopen(arg1, arg2) fopen(arg1, arg2)
     #define boinc_delete_file(arg1) remove(arg1)
 #endif
-
 
 __constant__ bool known[15][7][15];
 
@@ -431,7 +429,7 @@ int main(int argc, char *argv[] ) {
     int x = 0;
     int y = 0;
     int z = 0;
-
+    int gpu_device;
 
     // Parse arguments
     for (int i = 1; i < argc; i += 2) {
@@ -444,10 +442,24 @@ int main(int argc, char *argv[] ) {
             y = atoi(argv[i + 1]);
         } else if (strcmp(param, "-z") == 0) {
             z = atoi(argv[i + 1]);
+        } else if (strcmp(param, "-d") == 0 || strcmp(param, "--device") == 0){
+            gpu_device = atoi(argv[i + 1]);
         }
     }
-
-
+	#ifdef BOINC
+	APP_INIT_DATA aid;
+	boinc_get_init_data(aid);
+	
+	if (aid.gpu_device_num >= 0) {
+		gpu_device = aid.gpu_device_num;
+		fprintf(stderr,"boinc gpu %i gpuindex: %i \n", aid.gpu_device_num, gpu_device);
+		} else {
+		fprintf(stderr,"stndalone gpuindex %i \n", gpu_device);
+	}
+	#endif
+    cudaSetDevice(gpu_device);
+    GPU_ASSERT(cudaPeekAtLastError());
+    GPU_ASSERT(cudaDeviceSynchronize());
     center[0] = x;
     center[1] = y;
     center[2] = z;
