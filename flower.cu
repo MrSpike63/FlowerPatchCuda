@@ -52,6 +52,15 @@
     #define boinc_delete_file(arg1) remove(arg1)
 #endif
 
+
+#define GPU_ASSERT(code) gpuAssert((code), __FILE__, __LINE__)
+inline void gpuAssert(cudaError_t code, const char *file, int line) {
+    if (code != cudaSuccess) {
+        fprintf(stderr, "GPUassert: %s (code %d) %s %d\n", cudaGetErrorString(code), code, file, line);
+        exit(code);
+    }
+}
+
 __constant__ bool known[15][7][15];
 
 int center[3] = {99, 68, -100};
@@ -447,16 +456,17 @@ int main(int argc, char *argv[] ) {
         }
     }
 	#ifdef BOINC
-	APP_INIT_DATA aid;
-	boinc_get_init_data(aid);
-	
-	if (aid.gpu_device_num >= 0) {
-		gpu_device = aid.gpu_device_num;
-		fprintf(stderr,"boinc gpu %i gpuindex: %i \n", aid.gpu_device_num, gpu_device);
-		} else {
-		fprintf(stderr,"stndalone gpuindex %i \n", gpu_device);
-	}
-	#endif
+        APP_INIT_DATA aid;
+        boinc_get_init_data(aid);
+        
+        if (aid.gpu_device_num >= 0) {
+            gpu_device = aid.gpu_device_num;
+            fprintf(stderr,"boinc gpu %i gpuindex: %i \n", aid.gpu_device_num, gpu_device);
+            } else {
+            fprintf(stderr,"stndalone gpuindex %i \n", gpu_device);
+        }
+    #endif
+    
     cudaSetDevice(gpu_device);
     GPU_ASSERT(cudaPeekAtLastError());
     GPU_ASSERT(cudaDeviceSynchronize());
