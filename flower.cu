@@ -85,6 +85,8 @@ int coords[18][3] = {
     {105, 68, -101}
 };
 
+// Predefined centers for easier work unit creation
+int predefined_centers[][3] = {{98, 67, -103}, {98, 67, -102}, {98, 67, -101}, {98, 67, -100}, {98, 68, -103}, {98, 68, -102}, {98, 68, -101}, {98, 68, -100}, {98, 69, -103}, {98, 69, -102}, {98, 69, -101}, {98, 69, -100}, {98, 70, -103}, {98, 70, -102}, {98, 70, -101}, {98, 70, -100}, {99, 67, -103}, {99, 67, -102}, {99, 67, -101}, {99, 67, -100}, {99, 68, -103}, {99, 68, -102}, {99, 68, -101}, {99, 68, -100}, {99, 69, -103}, {99, 69, -102}, {99, 69, -101},{99, 69, -100}, {99, 70, -103}, {99, 70, -102}, {99, 70, -101}, {99, 70, -100},{100, 67, -103}, {100, 67, -102}, {100, 67, -101}, {100, 67, -100}, {100, 68, -103}, {100, 68, -102}, {100, 68, -101}, {100, 68, -100}, {100, 69, -103}, {100, 69, -102}, {100, 69, -101}, {100, 69, -100}, {100, 70, -103}, {100, 70, -102}, {100, 70, -101}, {100, 70, -100},};
 
 // Polymetrics test data
 /*
@@ -438,12 +440,13 @@ int main(int argc, char *argv[] ) {
     int x = 0;
     int y = 0;
     int z = 0;
+    int predefined_center = -1;
     int gpu_device;
 
     // Parse arguments
     for (int i = 1; i < argc; i += 2) {
         const char *param = argv[i];
-        if (strcmp(param, "--dfz") == 0) {
+        if (strcmp(param, "-dfz") == 0) {
             dfz = atoi(argv[i + 1]);
         } else if (strcmp(param, "-x") == 0) {
             x = atoi(argv[i + 1]);
@@ -451,11 +454,33 @@ int main(int argc, char *argv[] ) {
             y = atoi(argv[i + 1]);
         } else if (strcmp(param, "-z") == 0) {
             z = atoi(argv[i + 1]);
-        } else if (strcmp(param, "-d") == 0 || strcmp(param, "--device") == 0){
+        } else if (strcmp(param, "-p") == 0 || strcmp(param, "--predifined-center") == 0) {
+            predefined_center = atoi(argv[i + 1]);
+        } else if (strcmp(param, "-d") == 0 || strcmp(param, "--device") == 0) {
             gpu_device = atoi(argv[i + 1]);
         }
     }
-	#ifdef BOINC
+
+    if (predefined_center >= 48 || predefined_center < 0) {
+        fprintf(stderr, "Predefined center %d is invalid.", predefined_center);
+    }
+
+    // Load predefined center (makes work unit creation easier)
+    if (predefined_center == -1) {
+        center[0] = x;
+        center[1] = y;
+        center[2] = z;
+    } else {
+        center[0] = predefined_centers[predefined_center][0];
+        center[1] = predefined_centers[predefined_center][1];
+        center[2] = predefined_centers[predefined_center][2];
+    }
+    
+
+    fprintf(stderr, "Received arguments: dfz: %llu, center: %d, %d, %d.\n", dfz, x, y, z);
+
+
+    #ifdef BOINC
         APP_INIT_DATA aid;
         boinc_get_init_data(aid);
         
@@ -470,11 +495,6 @@ int main(int argc, char *argv[] ) {
     cudaSetDevice(gpu_device);
     GPU_ASSERT(cudaPeekAtLastError());
     GPU_ASSERT(cudaDeviceSynchronize());
-    center[0] = x;
-    center[1] = y;
-    center[2] = z;
-
-    fprintf(stderr, "Received arguments: dfz: %llu, center: %d, %d, %d.\n", dfz, x, y, z);
 
 
     // Do the gpu thing
